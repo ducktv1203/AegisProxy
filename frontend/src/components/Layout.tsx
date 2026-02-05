@@ -1,4 +1,4 @@
-import { LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Shield, Activity, Settings, FileText, Lock } from 'lucide-react';
