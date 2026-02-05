@@ -24,17 +24,18 @@ async def lifespan(app: FastAPI):
     configure_logging()
     logger = get_logger()
     settings = get_settings()
-    
-    logger.info("startup", version=__version__, settings=settings.model_dump(mode="json"))
-    
+
+    logger.info("startup", version=__version__,
+                settings=settings.model_dump(mode="json"))
+
     # Initialize components
     initialize_filters()
     init_metrics(__version__)
-    
+
     logger.info("components_initialized")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("shutdown")
     await get_proxy_handler().close()
@@ -43,7 +44,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     settings = get_settings()
-    
+
     app = FastAPI(
         title="AegisProxy",
         description="Secure AI Gateway for LLM traffic inspection",
@@ -64,7 +65,7 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def telemetry_middleware(request: Request, call_next):
         start_time = time.time()
-        
+
         try:
             response = await call_next(request)
             status = response.status_code
@@ -73,8 +74,9 @@ def create_app() -> FastAPI:
             raise
         finally:
             duration = time.time() - start_time
-            request_duration_seconds.labels(endpoint=request.url.path).observe(duration)
-            
+            request_duration_seconds.labels(
+                endpoint=request.url.path).observe(duration)
+
         return response
 
     # Mount Prometheus metrics
@@ -84,6 +86,9 @@ def create_app() -> FastAPI:
 
     # Register routers
     app.include_router(api_router)
+
+    from aegis.api.dashboard import router as dashboard_router
+    app.include_router(dashboard_router)
 
     # Root endpoint
     @app.get("/")
@@ -105,7 +110,7 @@ def run():
     """Run the application using uvicorn."""
     import uvicorn
     settings = get_settings()
-    
+
     uvicorn.run(
         "aegis.main:app",
         host=settings.host,
