@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ShieldCheck, 
   ShieldAlert, 
@@ -7,21 +7,12 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { fetchDashboardStats, type DashboardStats, type ChartDataPoint } from '../services/api';
 import './Dashboard.css';
-
-const data = [
-  { name: '00:00', requests: 400, blocked: 24 },
-  { name: '04:00', requests: 300, blocked: 10 },
-  { name: '08:00', requests: 200, blocked: 5 },
-  { name: '12:00', requests: 278, blocked: 38 },
-  { name: '16:00', requests: 189, blocked: 40 },
-  { name: '20:00', requests: 239, blocked: 25 },
-  { name: '23:59', requests: 349, blocked: 15 },
-];
 
 const StatCard: React.FC<{
   title: string;
-  value: string;
+  value: string | number;
   change: string;
   trend: 'up' | 'down' | 'neutral';
   icon: React.ElementType;
@@ -44,6 +35,28 @@ const StatCard: React.FC<{
 );
 
 export const Dashboard: React.FC = () => {
+  const [stats, setStats] = useState<DashboardStats>({
+    total_requests: 0,
+    blocked_requests: 0,
+    pii_detected: 0,
+    injection_detected: 0,
+    start_time: new Date().toISOString()
+  });
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+        const data = await fetchDashboardStats();
+        setStats(data.summary);
+        setChartData(data.chart_data);
+    };
+
+    loadData();
+    // Poll every 5 seconds
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="dashboard">
       <header className="page-header">
@@ -54,7 +67,7 @@ export const Dashboard: React.FC = () => {
         <div className="header-actions">
           <button className="btn-primary">
             <Activity size={16} />
-            Live View
+            Live View {stats.total_requests > 0 && <span className="badge">LIVE</span>}
           </button>
         </div>
       </header>
@@ -62,29 +75,29 @@ export const Dashboard: React.FC = () => {
       <div className="stats-grid">
         <StatCard
           title="Total Requests"
-          value="124.5k"
-          change="+12.5%"
-          trend="up"
+          value={stats.total_requests}
+          change="~"
+          trend="neutral"
           icon={Zap}
         />
         <StatCard
           title="Threats Blocked"
-          value="1,204"
-          change="+2.4%"
-          trend="down"
+          value={stats.blocked_requests}
+          change={`${stats.total_requests > 0 ? ((stats.blocked_requests / stats.total_requests) * 100).toFixed(1) : 0}%`}
+          trend={stats.blocked_requests > 0 ? "down" : "neutral"}
           icon={ShieldAlert}
         />
         <StatCard
-          title="PII Redacted"
-          value="843"
-          change="+5.1%"
+          title="PII Detected"
+          value={stats.pii_detected}
+          change="~"
           trend="up"
           icon={ShieldCheck}
         />
         <StatCard
-          title="Avg Latency"
-          value="142ms"
-          change="-12ms"
+          title="Injection Attempts"
+          value={stats.injection_detected}
+          change="~"
           trend="up"
           icon={Activity}
         />
@@ -100,7 +113,7 @@ export const Dashboard: React.FC = () => {
         </div>
         <div className="chart-container">
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={data}>
+            <AreaChart data={chartData.length > 0 ? chartData : [{time: 'Now', requests: 0, blocked: 0}]}>
               <defs>
                 <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -112,7 +125,7 @@ export const Dashboard: React.FC = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-              <XAxis dataKey="name" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
+              <XAxis dataKey="time" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#111', border: '1px solid #27272a', borderRadius: '8px' }}

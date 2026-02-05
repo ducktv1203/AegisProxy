@@ -1,5 +1,7 @@
 """OpenAI-compatible API router."""
 
+from aegis.telemetry.stats import get_stats_store, StatsStore, RequestRecord
+from datetime import datetime
 import time
 import uuid
 
@@ -37,6 +39,7 @@ async def create_chat_completion(
     settings: SettingsDep,
     pipeline: FilterPipeline = Depends(get_filter_pipeline),
     proxy: ProxyHandler = Depends(get_proxy_handler),
+    stats_store: StatsStore = Depends(get_stats_store),  # Inject stats store
 ):
     """
     Create a chat completion (OpenAI-compatible).
@@ -44,6 +47,8 @@ async def create_chat_completion(
     This endpoint intercepts requests, runs them through the security filter
     pipeline, and forwards safe requests to the configured LLM provider.
     """
+    start_time = time.time()
+
     # Log incoming request (no sensitive data)
     logger.info(
         "chat_completion_request",
@@ -61,6 +66,15 @@ async def create_chat_completion(
         client_info=client_info,
     )
 
+    # Calculate metrics for stats
+    pii_count = len(
+        [f for f in filter_result.all_findings if f.type.value == "pii"])
+    # Helper to safe-get injection score from metadata
+    injection_score = 0.0
+    for f in filter_result.all_findings:
+        if f.type.value == "injection":
+            injection_score = max(injection_score, f.confidence)
+
     # Handle blocked requests
     if filter_result.blocked:
         logger.warning(
@@ -69,6 +83,18 @@ async def create_chat_completion(
             reason=filter_result.block_reason,
             filter_name=filter_result.blocking_filter,
         )
+
+        # Record blocked request
+        stats_store.record_request(RequestRecord(
+            id=request_id,
+            timestamp=datetime.utcnow().isoformat(),
+            status="blocked",
+            pii_count=pii_count,
+            injection_score=injection_score,
+            latency_ms=(time.time() - start_time) * 1000,
+            model=request.model
+        ))
+
         raise HTTPException(
             status_code=403,
             detail=SecurityBlockResponse(
@@ -89,6 +115,18 @@ async def create_chat_completion(
     # Forward to LLM
     try:
         if request.stream:
+            # Note: Streaming requests are hard to record "success" status for accurately
+            # without wrapping the stream generator. For now, we record as allowed immediately.
+            stats_store.record_request(RequestRecord(
+                id=request_id,
+                timestamp=datetime.utcnow().isoformat(),
+                status="allowed",
+                pii_count=pii_count,
+                injection_score=injection_score,
+                latency_ms=(time.time() - start_time) * 1000,
+                model=request.model
+            ))
+
             return StreamingResponse(
                 proxy.stream_completion(modified_request, api_key, request_id),
                 media_type="text/event-stream",
@@ -100,6 +138,18 @@ async def create_chat_completion(
             )
         else:
             response = await proxy.complete(modified_request, api_key, request_id)
+
+            # Record allowed request (completed)
+            stats_store.record_request(RequestRecord(
+                id=request_id,
+                timestamp=datetime.utcnow().isoformat(),
+                status="allowed",
+                pii_count=pii_count,
+                injection_score=injection_score,
+                latency_ms=(time.time() - start_time) * 1000,
+                model=request.model
+            ))
+
             return response
     except Exception as e:
         logger.error(
@@ -107,6 +157,17 @@ async def create_chat_completion(
             request_id=request_id,
             error=str(e),
         )
+        # Record error
+        stats_store.record_request(RequestRecord(
+            id=request_id,
+            timestamp=datetime.utcnow().isoformat(),
+            status="error",
+            pii_count=pii_count,
+            injection_score=injection_score,
+            latency_ms=(time.time() - start_time) * 1000,
+            model=request.model
+        ))
+
         raise HTTPException(
             status_code=502,
             detail={"message": "Error communicating with LLM provider",

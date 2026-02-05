@@ -1,6 +1,0 @@
-Error: FilterResult.__init__() got an unexpected keyword argument 'processed_content'
-Traceback (most recent call last):
-  File "C:\Users\kentrn\Desktop\AegisProxy\backend\src\aegis\filters\redaction\filter.py", line 91, in analyze
-    return FilterResult(
-           ^^^^^^^^^^^^^
-TypeError: FilterResult.__init__() got an unexpected keyword argument 'processed_content'
