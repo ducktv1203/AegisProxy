@@ -4,8 +4,7 @@ import {
   ShieldAlert, 
   Activity, 
   Zap,
-  ArrowUpRight,
-  TrendingUp
+  ArrowUpRight
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import './Dashboard.css';

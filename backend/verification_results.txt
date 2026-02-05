@@ -1,0 +1,9 @@
+[Test 1] PII Detection (OpenAI API Key)
+Action: PASSED
+Findings: 1
+ - FindingType.PII (API_KEY): 1.0
+Redacted Content: My API key is [API_KEY_1]
+
+[Test 2] Prompt Injection (Jailbreak)
+Action: BLOCKED
+Reason: Prompt injection detected: ignore_instructions (score: 0.75)

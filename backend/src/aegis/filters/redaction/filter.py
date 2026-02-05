@@ -47,8 +47,9 @@ class RedactionFilter(BaseFilter):
         # In this implementation, we will use the 'findings' in the context
         # to drive redaction.
 
-        # Check if we have findings to act upon
-        if not context.findings:
+        # Check if we have findings to act upon from metadata
+        findings = context.metadata.get("pii_findings", [])
+        if not findings:
             return FilterResult(action=FilterAction.PASS)
 
         try:
@@ -62,12 +63,12 @@ class RedactionFilter(BaseFilter):
             # Let's perform the redaction using the engine.
             # We need to convert context.findings to the format expected by redact_text
 
-            # Import here to avoid circular dependency if needed, though we imported engine above.
+            # Import here to avoid circular dependency
             from presidio_analyzer import RecognizerResult
 
             analyzer_results = []
-            for finding in context.findings:
-                if finding.filter_name == "pii_filter":  # Only redact PII findings
+            for finding in findings:
+                if finding.filter_name == "pii_detector":  # Only redact PII findings
                     analyzer_results.append(RecognizerResult(
                         entity_type=finding.entity_type,
                         start=finding.start,
@@ -89,7 +90,7 @@ class RedactionFilter(BaseFilter):
 
             return FilterResult(
                 action=FilterAction.REDACT,
-                processed_content=redaction_result.text,
+                modified_content=redaction_result.text,
                 reason=f"Redacted {len(redaction_result.items)} items",
             )
 
