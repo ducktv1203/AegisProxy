@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  aegis-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AEGIS_LOG_LEVEL=INFO
+    volumes:
+      - ./backend/src:/app/src
+    restart: unless-stopped
+
+  aegis-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - aegis-backend
+    restart: unless-stopped
